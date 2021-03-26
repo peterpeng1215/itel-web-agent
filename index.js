@@ -29,7 +29,7 @@ async function deleteInstance(id) {
         } finally {
             for (c in instanceManager[id].children) {
                 console.warn("deleting child item",c)
-                delete allInstances[c]
+                delete allInstances[instanceManager[id].children[c]]
             }
             delete allInstances[id]
         }
@@ -84,6 +84,7 @@ app.post('/instances/:id/actions/:method', async (req,res) => {
     let obj = allInstances[id]
     let instance = instanceManager[id] || {}
     instance.last_activation = Date.now()
+    
     
     if (!obj) {
         console.log("404",req.url)
