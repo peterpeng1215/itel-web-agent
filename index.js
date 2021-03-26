@@ -12,11 +12,54 @@ let allInstances = {
 
 }
 
+let instanceManager = {
+
+}
+// max idle in seconds, if exceed, then delete the instance
+const MAX_IDLE = 120
+
+async function deleteInstance(id) {
+    let instance = instanceManager[id]
+    if (instance) {
+        console.warn("deleting",id)
+        try  {
+            await allInstances[id].close()
+        } catch (e) {
+            
+        } finally {
+            for (c in instanceManager[id].children) {
+                console.warn("deleting child item",c)
+                delete allInstances[c]
+            }
+            delete allInstances[id]
+        }
+        delete instanceManager[id]
+    }
+
+}
+
+setInterval(async () => {
+
+    for (id in instanceManager) {
+        if ( Date.now() - instanceManager[id].last_activation >= MAX_IDLE*1000) {
+            console.log(instanceManager[id].id, "idled",  Date.now() - instanceManager[id].last_activation)
+            await deleteInstance(id)
+        }
+
+    }
+}, 10000)
+
 app.post('/instances', async (req,res) => {
     let newID = uuid()
     // let page = await browser.newPage()
     // page.responseHistory = []
     allInstances[newID] = await browser()
+    instanceManager[newID] = {
+        id : newID,
+        children : [],
+        start :  Date.now(), 
+        last_activation :  Date.now()
+    }
     // page.visit = page.goto
     // page.on('response', async (resp) => {
     //     try {
@@ -39,6 +82,8 @@ app.post('/instances', async (req,res) => {
 app.post('/instances/:id/actions/:method', async (req,res) => {
     let id = req.params.id;
     let obj = allInstances[id]
+    let instance = instanceManager[id] || {}
+    instance.last_activation = Date.now()
     
     if (!obj) {
         console.log("404",req.url)
@@ -66,6 +111,8 @@ app.post('/instances/:id/actions/:method', async (req,res) => {
                     ret = r.map((nr) => {
                         let newID = uuid()
                         allInstances[newID] = nr
+                        instanceManager[id].children= instanceManager[id].children || []
+                        instanceManager[id].children.push(newID)
                         return {id:newID}
                     })
                     
@@ -73,6 +120,9 @@ app.post('/instances/:id/actions/:method', async (req,res) => {
                 } else {
                     let newID = uuid()
                     allInstances[newID] = r
+                    instanceManager[id].children= instanceManager[id].children || []
+                    instanceManager[id].children.push(newID)
+
                     ret = {id:newID}
     
                 }
@@ -106,7 +156,10 @@ app.post('/instances/:id/actions/:method', async (req,res) => {
 
 })
 
-app.delete('/instances/:id/actions', async (req,res) => {
+app.delete('/instances/:id', async (req,res) => {
+    console.log("deleting",req.params.id)
+    await deleteInstance(req.params.id)
+    res.status(204)
 
 })
 
